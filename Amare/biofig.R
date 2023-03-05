@@ -1,0 +1,306 @@
+library(dplyr)
+library(factoextra)
+library(FactoMineR)
+library(ggplot2)
+library(ggrepel)
+library(dendextend)
+
+
+## PC plots 
+plot_2DPCA<-function(expression,group,colors=NULL,shape=NULL,
+                     samplenames,title="PCA",LegendName_Color="group",
+                     LegendName_Shape="shape",LegendName="group",
+                     ggrepelLab=TRUE,size_gglab=5,size_title=14,
+                     point.size=4,scl=T,ntop=NULL,
+                     transform=c("no","vst","rlog"),
+                     scale=F,MahalanobisEllips=F,
+                     plottype = c("PCA", "mds", "heatmap")){
+  
+  if (!is(group, "character")) {
+    stop("Input (group) is of wrong class.")
+  }
+  if (!is(colors, "character")) {
+    stop("Input (colors) is of wrong class.")
+  }
+  if (!is(shape, "character")) {
+    stop("Input (shape) is of wrong class.")
+  }
+  if (!is(samplenames, "character")) {
+    stop("Input (samplenames) is of wrong class.")
+  }
+  if (!is(title, "character")) {
+    stop("Input (title) is of wrong class.")
+  }
+  if (!is(LegendName_Color, "character")) {
+    stop("Input (LegendName_Color) is of wrong class.")
+  }
+  if (!is(LegendName_Shape, "character")) {
+    stop("Input (LegendName_Shape) is of wrong class.")
+  }
+  if (!is(LegendName, "character")) {
+    stop("Input (LegendName) is of wrong class.")
+  }
+  if (!is(ggrepelLab, "logical")) {
+    stop("Input (ggrepelLab) is of wrong class.")
+  }
+  if (!is(size_gglab, "numeric")) {
+    stop("Input (size_gglab) is of wrong class.")
+  }
+  if (is.na(size_gglab)) {
+    stop("Input (size_gglab) is not a positive integer.")
+  }
+  if (size_gglab < 0) {
+    stop("Input (size_gglab) is not a positive integer.")
+  }
+  if (!is(size_title, "numeric")) {
+    stop("Input (size_title) is of wrong class.")
+  }
+  if (is.na(size_title)) {
+    stop("Input (size_title) is not a positive integer.")
+  }
+  if (size_title < 0) {
+    stop("Input (size_title) is not a positive integer.")
+  }
+  if (!is(point.size, "numeric")) {
+    stop("Input (point.size) is of wrong class.")
+  }
+  if (is.na(point.size)) {
+    stop("Input (point.size) is not a positive integer.")
+  }
+  if (point.size < 0) {
+    stop("Input (point.size) is not a positive integer.")
+  }
+  if (!is(scl, "logical")) {
+    stop("Input (scl) is of wrong class.")
+  } 
+  if (!is(transform, "character")) {
+    if (!(transform %in% c("no","vst","rlog"))) {
+      stop("Input (transform) ill-specified.")
+    }
+  }
+  if (!is(scale, "logical")) {
+    stop("Input (scale) is of wrong class.")
+  } 
+  if (!is(MahalanobisEllips, "logical")) {
+    stop("Input (MahalanobisEllips) is of wrong class.")
+  } 
+  
+  if (!is(plottype, "character")) {
+    stop("Input (plottype) is of wrong class.")
+  }
+  
+  #Deseq2 option
+  if(class(expression)=="DESeqDataSet"){
+    group<-colData(expression)[,group]
+    samplenames<-colData(expression)[,samplenames]
+    expression<-assay(expression)
+  }
+  
+  #EdgeR option
+  if(class(expression)=="DGEList" && attr(attributes(expression)[[1]],"package")=="edgeR"){
+    #group <- expression[[2]][1]
+    expression<-edgeR::getCounts(expression)
+    samplenames<-colnames(expression)
+  }
+  
+  
+  #Add option transform data (could be packed in another function)
+  transform<-match.arg(transform) #MAybe change it later to a simple if(is.na())
+  if(!transform=="no"){
+    eval_r<-switch(transform, "vst" = vst(expression),"rlog" = rlog(expression))
+    expression<-eval_r
+    scl<-F
+    if(scale){scl<-T}
+  }else{
+    if(scale){scl<-T}
+  }
+  
+  #Add option to use only the top n genes that explain most of the variance
+  if(!is.null(ntop)){
+    rv <- rowVars(expression)
+    select <- order(rv, decreasing = TRUE)[seq_len(min(ntop, length(rv)))]
+    expression<-expression[select,]
+  }
+  
+  if(plottype == "PCA"){
+    df_pca<-prcomp(t(expression),scale=scl)
+    df_out <- as.data.frame(df_pca$x)
+    df_out$group<-group
+    df_out$sample_name<-samplenames
+    
+    percentage <- round(df_pca$sdev^2 / sum(df_pca$sdev^2)*100,2)
+    percentage <- paste0(colnames(df_out)[grep("^PC",colnames(df_out))], " (", paste0(as.character(percentage), "% variance", ")") )
+    print(percentage)
+    
+    if(is.null(shape)){
+      p<-ggplot(df_out,aes(x=PC1,y=PC2,color=group))
+      if(!is.null(colors)){p<-p+scale_color_manual(values=colors,name=LegendName)}
+    }else{
+      p<-ggplot(df_out,aes(x=PC1,y=PC2,color=group,shape=shape))
+      if(!is.null(colors)){p<-p+scale_color_manual(values=colors,name=LegendName)}
+    }
+    
+    
+    p<-p+geom_point(size=point.size)+ xlab(percentage[1]) + ylab(percentage[2])+
+      #geom_text(label=row.names(df_out_raw),show.legend = FALSE,hjust=0,vjust=0.2)
+      theme(plot.title = element_text(size = size_title, face = "bold",hjust = 0.5),
+            legend.title=element_text(size=14), legend.text=element_text(size=12,),
+            axis.title.x = element_text(size = 14),axis.title.y = element_text(size = 14),
+            panel.background = element_blank(),
+            panel.grid.major =  element_line(colour = "grey90", size = 0.2),
+            panel.grid.minor =  element_line(colour = "grey98", size = 0.5),
+            panel.border = element_rect(color='black',fill=NA))
+    if(ggrepelLab){
+      p<-p + geom_text_repel(aes(label=sample_name),show.legend = FALSE,
+                             size=size_gglab,
+                             force = 2,max.overlaps = Inf) +
+        labs(shape=LegendName_Shape, col=LegendName_Color)+
+        ggtitle(title)
+    }
+    
+    if(MahalanobisEllips){
+      p<-p+stat_ellipse()
+    }
+    return(p)
+    
+  }
+  
+  if(plottype == "mds"){
+    
+    ## calculate distance for the sample
+    data <- expression %>%
+      t() %>%
+      dist() %>%
+      as.matrix()
+    
+    ## convert distance matrix to Classical multidimensional scaling(MDS)
+    mdsData <- data.frame(cmdscale(data))
+    mds <- cbind(mdsData, as.data.frame(data)) # combine with distance with mds
+    
+    ## plot in ggplot2
+    plotmds <- ggplot(mds, aes(X1, X2)) +
+      geom_point(size = 3) +
+      theme_minimal() +
+      theme(axis.title=element_text(size = 12,face="bold", colour = "black"),
+            axis.text = element_text(size = 12),
+            axis.ticks = element_line(colour='black'),
+            plot.title = element_text(hjust = 0.5,size=12,face="bold"),
+            legend.position = "bottom",
+            legend.title = element_text(color = "Black", size = 12, face = "bold"),
+            legend.text=element_text(color = "Black", size = 12, face = "bold"),
+            panel.background = element_blank(),
+            panel.grid.major =  element_line(colour = "grey90", size = 0.2),
+            panel.grid.minor =  element_line(colour = "grey98", size = 0.5),
+            panel.border = element_rect(color='black',fill=NA)) +
+      labs(x = "Leading LogFC dim 1", y = "Leading LogFC dim 2", title = "MDS plot") +
+      ggrepel::geom_text_repel(data = mds,aes(label = rownames(mds)))
+  }
+  return(plotmds)
+}
+
+plot_2DPCA(expression= expression, plottype = "mds")
+####################################################################################################
+## Sample deprogram
+plot_sample_den <-function(exp.data,colors, ...){
+  dend <- as.dendrogram(hclust(dist(t(exp.data))))
+  colors <- ifelse(sample.data$condition == "treated", "skyblue",
+                   "orange")
+  par(mar=c(9,4,3,3))
+  dend %>%
+    #set("labels_col", value = c("skyblue", "orange"), k= 2) %>%
+    #set("branches_k_color", value = c("skyblue", "orange"), k = 2) %>%
+    set("branches_lwd", 2) %>%
+    set("labels_cex", 1) %>%
+    set("nodes_cex", 0.7) %>%
+    plot(axes=TRUE, main = "Sample Dendogram", 
+         cex.main = 1.5, font.main= 4)
+  # Add the colored bar
+  colored_bars(colors = colors, dend = dend, rowLabels = "Label")
+  
+}
+
+
+## Volcano plots 
+## 1st I did DEA
+library(DESeq2)
+sample <- sample.data %>% mutate_if(is.character, factor)
+rownames(sample) <- rownames(sample.data)
+sample.data <- sample
+dds <- DESeqDataSetFromMatrix(countData = exp.data,
+                              colData = sample.data,
+                              design = ~ condition + type)
+
+
+## keep genes with 50 or higher count in each sample  
+keep <- rowSums(counts(dds)) >= 350   
+dds <- dds[keep,]
+nrow(dds) ## 6929
+dds <- DESeq(dds)
+resultsNames(dds)
+
+
+## transformation 
+vsd <- vst(dds, blind = FALSE) 
+write.csv(as.data.frame(assay(vsd)), file = "vsd_data.csv")
+
+## contrast treated vs untreated 
+data <- results(dds, alpha = 0.05, contrast = c("condition","treated", "untreated"))
+summary(data) 
+
+## Order by padj
+data <- as.data.frame(data[order(exp.data$padj),])
+write.csv(data,  file = "DEG.csv")
+
+## volcano plot 
+plot_volcano <- function(expression,
+                         Significant,
+                         title = "Volcano Plot",
+                         subtitle = "Treated vs Non-Treated",
+                         legend.name,
+                         num_sig_gene,
+                         color,..){
+  
+  expression$Significant <- ifelse(expression$padj < 0.05, "Sig", "Not Sig")
+  expression$col <- ifelse(expression$log2FoldChange < 0 & expression$padj < 0.05, 'Downregulated',
+                                    ifelse(expression$log2FoldChange > 0 & expression$padj < 0.05, "Upregulated",
+                                           "none Sig & expressed"))
+  ggplot(expression, aes(x = log2FoldChange, y = -log10(padj))) +
+    geom_point(aes(color = col), size=4) + 
+    scale_color_manual(values = c("royalblue", "grey", "red")) +
+    geom_vline(xintercept = 0, linetype = 2, colour='black', size = 1) +
+    geom_hline(yintercept = 1.3, linetype = 2, colour='black', size = 1)+
+    theme_bw(base_size = 12)+ 
+    theme(axis.title=element_text(size = 12,face="bold", colour = "black"),
+          axis.text = element_text(size = 12,face="bold", colour = "black"),
+          axis.line = element_line(colour='black'),
+          axis.ticks = element_line(colour='black'),
+          plot.title = element_text(hjust = 0.5,size=12,face="bold"),
+          plot.subtitle = element_text(hjust = 0.5,size=10,face="bold"),
+          legend.position = "bottom",
+          legend.title = element_text(color = "Black", size = 10, face = "bold"),
+          legend.text=element_text(color = "Black", size = 10, face = "bold")) +
+    labs(x = "log2FoldChange",
+         y = "-log10(padj)",
+         color = "Sig.Level")+
+    ggtitle(title) +
+    geom_text_repel(data = expression[1:20, ],aes(label = rownames(expression[1:20, ])))
+
+  
+  }
+
+## Test Functions
+## Read expression and sample data 
+exp.data <- read.csv("cts.csv", row.names = 1)
+sample.data <- read.csv("Sample.csv", row.names = 1)
+
+## PC plot 
+plot_PCA(exp.data)  
+
+## sample distance   
+plot_sample_den(exp.data)
+
+## volcano plot for DE genes 
+data <- read.csv("DEG.csv", row.names = 1)
+plot_volcano(expression = data, subtitle = "Treated vs Non-Treated")
+####################################################################################################
+
