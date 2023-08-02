@@ -852,40 +852,53 @@ list_DO <- c(
 )
 
 # Function to combine data frames with missing pathways
+# Function to combine data frames with missing pathways
 combine_data_frames <- function(df1, df2) {
   # Find the pathways that are present in df1 but not in df2
   missing_pathways_df2 <- setdiff(df1$Description, df2$Description)
   
-  # Create a new data frame with missing pathways for df2
-  missing_rows_df2 <- data.frame(
-    Description = missing_pathways_df2,
-    GeneRatio = "0/0",
-    BgRatio = "0/0",
-    pvalue = 0,
-    p.adjust = 0,
-    qvalue = 0,
-    network = "MICN"
-  )
-  
   # Combine data frames using rbind, including the missing rows for df2
-  combined_df <- rbind(df1, df2, missing_rows_df2)
+  if (nrow(df1) == 0) {
+    combined_df <- df2
+  } else {
+    if (length(missing_pathways_df2) > 0) {
+      missing_rows_df2 <- data.frame(
+        Description = missing_pathways_df2,
+        GeneRatio = 1,
+        BgRatio = 1,
+        pvalue = 1,
+        p.adjust = 1,
+        qvalue = 1,
+        network = "MICN",
+        stringsAsFactors = FALSE
+      )
+      combined_df <- rbind(df1, df2, missing_rows_df2)
+    } else {
+      combined_df <- rbind(df1, df2)
+    }
+  }
   
   # Find the pathways that are present in df2 but not in df1
   missing_pathways_df1 <- setdiff(df2$Description, df1$Description)
   
-  # Create a new data frame with missing pathways for df1
-  missing_rows_df1 <- data.frame(
-    Description = missing_pathways_df1,
-    GeneRatio = "0/0",
-    BgRatio = "0/0",
-    pvalue = 0,
-    p.adjust = 0,
-    qvalue = 0,
-    network = "IMCN"
-  )
-  
   # Combine data frames using rbind, including the missing rows for df1
-  combined_df <- rbind(combined_df, missing_rows_df1)
+  if (nrow(df2) == 0) {
+    combined_df <- df1
+  } else {
+    if (length(missing_pathways_df1) > 0) {
+      missing_rows_df1 <- data.frame(
+        Description = missing_pathways_df1,
+        GeneRatio = 1,
+        BgRatio = 1,
+        pvalue = 1,
+        p.adjust = 1,
+        qvalue = 1,
+        network = "IMCN",
+        stringsAsFactors = FALSE
+      )
+      combined_df <- rbind(combined_df, missing_rows_df1)
+    }
+  }
   
   # Return the final combined data frame
   return(combined_df)
