@@ -851,8 +851,10 @@ list_DO <- c(
   "increased muscle glycogen content"
 )
 
-# Function to combine data frames with missing pathways
-# Function to combine data frames with missing pathways
+# This function combines two data frames containing biological pathway enrichment results. 
+# It is designed to handle cases where one data frame contains pathways missing in the other data frame and vice versa. 
+# The function adds the missing pathways to each data frame, setting the corresponding values to zero for the missing pathways. 
+# The final combined data frame includes all unique pathways from both input data frames.
 combine_data_frames <- function(df1, df2) {
   # Find the pathways that are present in df1 but not in df2
   missing_pathways_df2 <- setdiff(df1$Description, df2$Description)
