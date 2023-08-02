@@ -905,3 +905,31 @@ combine_data_frames <- function(df1, df2) {
   # Return the final combined data frame
   return(combined_df)
 }
+
+# do KEGG enrichment for each cluster
+enrichment_results_KEGG <- 
+  df %>%
+  dplyr::group_by(Clusters) %>%
+  dplyr::summarise(enrichment = list(perform_enricher(id, KEGG))) %>%
+  dplyr::ungroup()
+
+# Initialize an empty data frame
+enrichment_results_KEGG_df <- data.frame(stringsAsFactors = FALSE)
+for (i in seq_len(nrow(enrichment_results_KEGG))) {
+  cluster <- enrichment_results_KEGG$Clusters[i]
+  enrichment <- enrichment_results_KEGG$enrichment[[i]]
+  if (!is.null(enrichment) && nrow(enrichment) > 0) {
+    temp_df <- data.frame(Clusters2 = paste("Cluster", cluster), 
+                          Clusters = cluster,
+                          enrichment, 
+                          stringsAsFactors = FALSE)
+    enrichment_results_KEGG_df <- rbind(enrichment_results_KEGG_df, temp_df)
+    enrichment_results_KEGG_df <-  enrichment_results_KEGG_df %>%
+      dplyr::filter(Clusters %in% c(1:10)) %>%
+      magrittr::set_rownames(1:nrow(.))
+    enrichment_results_KEGG_df <- subset(enrichment_results_KEGG_df, subset = Count >= 5)
+  }
+}
+
+
+                          
