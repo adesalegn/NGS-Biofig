@@ -932,4 +932,13 @@ for (i in seq_len(nrow(enrichment_results_KEGG))) {
 }
 
 
-                          
+# function to get pathway genes 
+  get_pathway_genes <- function(enriched_pathways) {
+  pathways = as.character()
+  for(i in 1:nrow(enriched_pathways)){
+    df <- unlist(strsplit(enriched_pathways$core_enrichment[i],"/"))
+    pathways <- c(pathways,df)
+    pathways <- sort(pathways)
+  }
+  return(pathways)
+}
